@@ -20,6 +20,13 @@ _lines_hidden = []
 _leader_objects = []
 
 
+def is_leader_line(obj):
+    # Localized duplicate names often lose their .j suffix. Identify actual
+    # two-point leaders by geometry; keep four-point cross-section helpers.
+    return (obj.type == 'MESH' and len(obj.data.vertices) == 2
+            and len(obj.data.edges) == 1 and len(obj.data.polygons) == 0)
+
+
 def sync_leader_lines():
     if bpy.context.window_manager.za_show_names:
         for obj, was_hidden in _lines_hidden:
@@ -38,7 +45,7 @@ def sync_leader_lines():
         except ReferenceError:
             pass
     for obj in _leader_objects:
-        if obj.type in {'MESH', 'CURVE'} and re.search(r'\.j(?:\.\d{3})?$', obj.name):
+        if is_leader_line(obj):
             if obj.as_pointer() not in known:
                 _lines_hidden.append((obj, obj.hide_viewport))
                 obj.hide_viewport = True
@@ -110,7 +117,7 @@ def maintain_hidden():
     _hidden[:] = live
     known = {data.as_pointer(): index for index, (data, _) in enumerate(_hidden)}
     _labels.clear()
-    _leader_objects[:] = [o for o in bpy.context.scene.objects if o.type in {'MESH', 'CURVE'} and re.search(r'\.j(?:\.\d{3})?$', o.name)]
+    _leader_objects[:] = [o for o in bpy.context.scene.objects if is_leader_line(o)]
     for obj in bpy.context.scene.objects:
         if is_label(obj):
             _labels.append(obj)
@@ -343,5 +350,6 @@ def unregister():
         bpy.utils.unregister_class(cls)
     del bpy.types.WindowManager.za_screen_font_size
     del bpy.types.WindowManager.za_show_names
+
 
 
