@@ -1,0 +1,167 @@
+--- a/__init__.py
++++ b/__init__.py
+@@ -419,12 +419,23 @@
+ 
+         translations = bpy.data.texts['Translations'].as_string().splitlines()
+         languages = translations[0].split(';')
++        # fix: a language without a column must not raise KeyError
++        if self.lang not in languages:
++            self.report({'WARNING'}, (
++                "The 'Translations' text has no '{:s}' column (available: {:s}). "
++                "No names were changed.").format(self.lang, ', '.join(languages)))
++            return {'CANCELLED'}
+         trans_dict = dict()
+         for langs in translations[1:]:
+             langs = list(zip(languages, langs.split(';')))
+             translated_phrase = trans_dict[langs[0][1]] = dict()
+             for lang in langs[1:]:
+                 translated_phrase[lang[0]] = lang[1]
++
++        # fix: fall back to the row key (the English term), 'English' is never a dict key
++        for _key, _phrase in trans_dict.items():
++            if not _phrase.get(self.lang):
++                _phrase[self.lang] = _key
+ 
+         for ob in bpy.data.objects[:]:
+             # print('# ob:', ob)
+@@ -845,6 +856,23 @@
+             for child in (c for c in bpy.context.scene.objects if c.parent == ob and not c.visible_get() and c.name.endswith('.j')):
+                 child.hide_set(False)
+ 
++def _zanatomy_base_names(name):
++    # fix: muscle origin/insertion objects carry suffixes like '.e', '.o', '.e1',
++    # so the text block named after the data-block could never be found.
++    names = [name]
++    base = name
++    for suffix in (".e", ".o"):
++        if base.endswith(suffix):
++            base = base[:-2]
++            break
++    match = re.match(r"^(.*)\.[eo]\d+$", name)
++    if match:
++        base = match.group(1)
++    if base != name:
++        names.append(base)
++    return names
++
++
+ def msgbus_callback(*args):
+     # sync selection to text editor
+     active_object = bpy.context.active_object
+@@ -857,10 +885,15 @@
+             text_editor_area = area
+             break
+     
+-    if text_editor_area and basename in bpy.data.texts:
+-        text_editor_area.spaces[0].text = bpy.data.texts[basename]
++    doc_text = None
++    for _name in _zanatomy_base_names(basename):
++        doc_text = bpy.data.texts.get(_name)
++        if doc_text is not None:
++            break
++    if text_editor_area and doc_text is not None:
++        text_editor_area.spaces[0].text = doc_text
+         text_editor_area.spaces[0].top = 0
+-        text_editor_area.spaces[0].text.select_set(0, 0, 0, 0)
++        doc_text.select_set(0, 0, 0, 0)
+ 
+ 
+     # only label of visible object ought to be visible
+@@ -1042,6 +1075,17 @@
+             op.invert =  not collection['Cross-section-Z-inverse']
+ 
+ 
++def _zanatomy_has_key_colors():
++    # fix: the old gate used the hard-coded name '.Muscular system', which only exists
++    # in the Lite build (the full template uses '4: Muscular system'), so the panel was
++    # always empty and the toggle did nothing. Gate on data instead.
++    for col in bpy.data.collections:
++        for ob in col.objects:
++            if "key_color" in ob.keys():
++                return True
++    return False
++
++
+ class ZANATOMY_PT_Key_Color(bpy.types.Panel):
+     bl_space_type = 'VIEW_3D'
+     bl_region_type = 'UI'
+@@ -1052,7 +1096,7 @@
+     def draw(self, context):
+         layout = self.layout
+         
+-        if '.Muscular system' in bpy.data.collections:
++        if _zanatomy_has_key_colors():
+             layout.prop(context.scene.zanatomy, "key_color")
+ 
+ import os
+@@ -1156,7 +1200,8 @@
+             ob[f'Cross-section-{self.axis}'] = self.enable
+             ob[f'Cross-section-{self.axis}-inverse'] = self.invert
+             ob.update_tag(refresh={'OBJECT'})
+-        context.area.tag_redraw()
++        if context.area:
++            context.area.tag_redraw()
+ 
+         return {"FINISHED"}
+ 
+@@ -1186,7 +1231,8 @@
+             obj[f'Cross-section-{self.axis}'] = self.enable
+             obj[f'Cross-section-{self.axis}-inverse'] = self.invert
+             obj.update_tag(refresh={'OBJECT'})
+-        context.area.tag_redraw()
++        if context.area:
++            context.area.tag_redraw()
+         return {"FINISHED"}
+ 
+ class OBJECT_OT_key_color(bpy.types.Operator):
+@@ -1206,7 +1252,7 @@
+ class ZAnatomyProps(bpy.types.PropertyGroup):
+     enable_group_labels: bpy.props.BoolProperty(default=True, name="Enable Group Labels", update=lambda self, context: label_group_checkbox_update())
+     def key_color_func(self, context):
+-        if '.Muscular system' in bpy.data.collections:
++        if _zanatomy_has_key_colors():
+             var = self.key_color
+             for ob in [c for col in bpy.data.collections for c in col.all_objects if c.type == 'MESH' and 'key_color' in c]:
+                 ob['key_color'] = var
+@@ -1214,7 +1260,8 @@
+             for ob in [c for col in bpy.data.collections for c in col.all_objects if c.type == 'CURVE' and 'key_color' in c]:
+                 ob['key_color'] = var
+                 ob.update_tag(refresh={'OBJECT'})
+-        context.area.tag_redraw()
++        if context.area:
++            context.area.tag_redraw()
+     key_color: bpy.props.BoolProperty(default=False, name="Key Color", update=key_color_func)
+ 
+     def comic_shader_func(self, context):
+@@ -1223,7 +1270,8 @@
+             if 'comic_shader' in ob:
+                 ob['comic_shader'] = var
+                 ob.update_tag(refresh={'OBJECT'})
+-        context.area.tag_redraw()
++        if context.area:
++            context.area.tag_redraw()
+     comic_shader: bpy.props.BoolProperty(default=False, name="Comic Shader", update=comic_shader_func)
+ 
+     def background_color_func(self, context):
+@@ -1277,7 +1325,8 @@
+                 obj[f'theme'] = 1
+                 obj.update_tag(refresh={'OBJECT'})
+         
+-        context.area.tag_redraw()
++        if context.area:
++            context.area.tag_redraw()
+ 
+         bpy.ops.script.execute_preset(
+             filepath=os.path.join(theme_dir, theme),
+@@ -1327,7 +1376,10 @@
+ 
+     font_size = 24
+     blf.color(0, 255, 255, 255, 255)
+-    blf.size(0, font_size, 72)
++    try:
++        blf.size(0, font_size)          # Blender 5.x: dpi argument removed
++    except TypeError:
++        blf.size(0, font_size, 72)      # Blender <= 4.x
+     blf.position(0, 55, context.area.height-70 - font_size, 0)
+     blf.draw(0, f'{clean_name(context.object.name)[0]}')
+ 

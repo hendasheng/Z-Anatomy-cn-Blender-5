@@ -1,0 +1,9 @@
+feat: adapt Z-Anatomy Chinese edition for Blender 5.0+
+
+Base the release on official Z-Anatomy and Dean Song's Chinese edition.
+Include compatibility fixes, Chinese UI and text synchronization improvements,
+and numbered collection shortcut adjustments.
+
+Credit Chinese translation to Dean Song (@Dean-Song-1).
+Preserve original model attribution and component license notices.
+Document remaining runtime verification and scene reproduction limitations.

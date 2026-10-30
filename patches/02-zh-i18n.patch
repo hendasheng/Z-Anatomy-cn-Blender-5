@@ -1,0 +1,560 @@
+--- a/__init__.py
++++ b/__init__.py
+@@ -356,9 +356,97 @@
+     'Nederlands': 'Bfont',
+     'Deutsch': 'Bfont',
+     'Polski': 'Bfont',
+-    '中國人': 'YuMincho-Regular',
++    '中文': 'SourceHanSansCN-Regular',
+     
+ }
++
++# ---------------------------------------------------------------------------
++# ZANATOMY-PATCH: UI 中文化（面板标题 / 按钮 / 属性名 / 枚举项）
++UI_ZH = {
++    "Languages": "语言",
++    "Labels": "标签",
++    "Cross section": "横断面",
++    "Key colors": "关键颜色",
++    "Visibility": "可见性",
++    "Theme": "主题",
++    "Background": "背景",
++    "Translate": "翻译",
++    "Sync Visibility": "同步可见性",
++    "Key Color": "关键颜色",
++    "Comic Shader": "漫画风格",
++    "Enable Group Labels": "显示分组标签",
++    "Append Layer": "添加图层",
++    "Remove Layer": "移除图层",
++    "Collection Cross Section": "集合横断面",
++    "Object Cross Section": "物体横断面",
++    "Make Label": "创建标签",
++    "Change Label": "修改标签",
++    "Select Hierarchy": "选择层级",
++    "Local View (w/ lights)": "局部视图（含灯光）",
++    "Download Texts From Wiki": "从维基下载文本",
++    "Label's tranforms to delta": "标签变换转 delta",
++    "Hide": "隐藏",
++    "Show Hidden Objects": "显示隐藏物体",
++    "Active:": "当前物体：",
++    "Layers:": "图层：",
++    "White": "白色",
++    "Grey": "灰色",
++    "Transparent": "透明",
++    "Bright": "亮色",
++    "Dark": "暗色",
++    "Language": "语言",
++    "Re-apply": "重新应用",
++}
++
++
++def _ui_lang(context):
++    """UI 语言：优先用插件里选的语言，未选时跟随 Blender 界面语言。"""
++    lang = ""
++    try:
++        lang = context.scene.zanatomy.ui_language
++    except Exception:
++        lang = ""
++    if lang:
++        return lang
++    try:
++        if bpy.context.preferences.view.language.startswith("zh"):
++            return "中文"
++    except Exception:
++        pass
++    return "English"
++
++
++def _t(context, msgid):
++    if _ui_lang(context) == "中文":
++        return UI_ZH.get(msgid, msgid)
++    return msgid
++
++
++def _ui_translations():
++    return {"zh_HANS": {("*", en): zh for en, zh in UI_ZH.items()}}
++
++
++def _set_panel_labels(context):
++    """面板标题是静态 RNA，切换语言时需要重新注册才会更新。"""
++    zh = _ui_lang(context) == "中文"
++    pairs = (
++        (ZANATOMY_PT_languages, "Languages"),
++        (ZANATOMY_PT_labels, "Labels"),
++        (ZANATOMY_PT_Xsection, "Cross section"),
++        (ZANATOMY_PT_Key_Color, "Key colors"),
++        (ZANATOMY_PT_Visibility, "Visibility"),
++    )
++    for panel, en in pairs:
++        want = UI_ZH.get(en, en) if zh else en
++        if panel.bl_label == want:
++            continue
++        try:
++            bpy.utils.unregister_class(panel)
++            panel.bl_label = want
++            bpy.utils.register_class(panel)
++        except Exception:
++            pass
++
+ 
+ def first_n_bytes(string, n=63):
+     byte_length = 0
+@@ -386,13 +474,19 @@
+         ('Nederlands', 'Nederlands', '', 5),
+         ('Deutsch', 'Deutsch', '', 6),
+         ('Polski', 'Polski', '', 7),
+-        ('中國人', '中國人', '', 8),
++        ('中文', '中文', '', 8),
+         ],
+         default='English',
+         name="Language")
+     
+     def execute(self, context):
+         
++        try:
++            context.scene.zanatomy.ui_language = "中文" if self.lang == "中文" else "English"
++            _set_panel_labels(context)
++        except Exception:
++            pass
++
+         if self.lang == "English":
+             for ob in bpy.data.objects[:]:
+                 # print('# ob:', ob)
+@@ -419,11 +513,12 @@
+ 
+         translations = bpy.data.texts['Translations'].as_string().splitlines()
+         languages = translations[0].split(';')
+-        # fix: a language without a column must not raise KeyError
++        # ZANATOMY-PATCH: missing language column must not raise KeyError.
+         if self.lang not in languages:
+             self.report({'WARNING'}, (
+-                "The 'Translations' text has no '{:s}' column (available: {:s}). "
+-                "No names were changed.").format(self.lang, ', '.join(languages)))
++                "The 'Translations' text has no '{:s}' column "
++                "(available: {:s}). No names were changed."
++            ).format(self.lang, ', '.join(languages)))
+             return {'CANCELLED'}
+         trans_dict = dict()
+         for langs in translations[1:]:
+@@ -432,7 +527,7 @@
+             for lang in langs[1:]:
+                 translated_phrase[lang[0]] = lang[1]
+ 
+-        # fix: fall back to the row key (the English term), 'English' is never a dict key
++        # ZANATOMY-PATCH: partially filled columns fall back to the English key.
+         for _key, _phrase in trans_dict.items():
+             if not _phrase.get(self.lang):
+                 _phrase[self.lang] = _key
+@@ -442,14 +537,14 @@
+             if ob.type=="MESH":
+                 _, ending = clean_name(ob.name)
+                 eng_name, _ = clean_name(ob.data.name)
+-                if eng_name in trans_dict:
++                if eng_name in trans_dict and trans_dict[eng_name][self.lang] != eng_name:
+                     new_name = trans_dict[eng_name][self.lang]
+                     new_name = first_n_bytes(new_name)
+                     ob.name = new_name + ending
+             elif ob.type=="FONT":
+                 _, ending = clean_name(ob.name)
+                 eng_name, _ = clean_name(ob.data.name)
+-                if eng_name in trans_dict:
++                if eng_name in trans_dict and trans_dict[eng_name][self.lang] != eng_name:
+                     new_name = trans_dict[eng_name][self.lang]
+                     ob.data.body = new_name.upper()
+                     
+@@ -462,14 +557,14 @@
+                         self.report(type={"WARNING"}, message=f"Font {fonts[self.lang]} not found. Add it manualy.")
+ 
+                     if not ob.name.endswith('.st'):
+-                        if self.lang == '中國人':
++                        if self.lang == '中文':
+                             ob.data.size = 0.006
+                         else:
+                             ob.data.size = 0.003
+             elif ob.type=="CURVE":
+                 _, ending = clean_name(ob.name)
+                 eng_name, _ = clean_name(ob.data.name)
+-                if eng_name in trans_dict:
++                if eng_name in trans_dict and trans_dict[eng_name][self.lang] != eng_name:
+                     new_name = trans_dict[eng_name][self.lang]
+                     new_name = first_n_bytes(new_name)
+                     ob.name = new_name + ending
+@@ -480,9 +575,9 @@
+                 eng_name = col['English']
+                 if eng_name.endswith("'"):
+                     eng_name = eng_name[:-1]
+-                    if eng_name in trans_dict:
++                    if eng_name in trans_dict and trans_dict[eng_name][self.lang] != eng_name:
+                         col.name = trans_dict[eng_name][self.lang] + "'"
+-                elif eng_name in trans_dict:
++                elif eng_name in trans_dict and trans_dict[eng_name][self.lang] != eng_name:
+                     col.name = trans_dict[eng_name][self.lang]
+ 
+         return {"FINISHED"}
+@@ -778,6 +873,7 @@
+ 
+     # use timer to get correct context after registration
+     bpy.app.timers.register(only_once, first_interval=0.01)
++    bpy.app.timers.register(_zanatomy_sync_editor_text, first_interval=0.2)
+ 
+ layer_collections = []
+ def only_once():
+@@ -856,21 +952,83 @@
+             for child in (c for c in bpy.context.scene.objects if c.parent == ob and not c.visible_get() and c.name.endswith('.j')):
+                 child.hide_set(False)
+ 
+-def _zanatomy_base_names(name):
+-    # fix: muscle origin/insertion objects carry suffixes like '.e', '.o', '.e1',
+-    # so the text block named after the data-block could never be found.
+-    names = [name]
+-    base = name
++_ZH_TEXT_CACHE = {"key": None, "map": {}}
++
++
++def _zanatomy_english_to_chinese(eng):
++    # ZANATOMY-PATCH: 从 Translations 表取英文->中文，带长度失效的简单缓存。
++    txt = bpy.data.texts.get("Translations")
++    if txt is None:
++        return None
++    raw = txt.as_string()
++    if _ZH_TEXT_CACHE["key"] != len(raw):
++        header = raw.split("\n", 1)[0].split(";")
++        mapping = {}
++        if "中文" in header:
++            idx = header.index("中文")
++            for line in raw.splitlines()[1:]:
++                cells = line.split(";")
++                if len(cells) > idx and cells[idx].strip():
++                    mapping[cells[0]] = cells[idx].strip()
++        _ZH_TEXT_CACHE["map"] = mapping
++        _ZH_TEXT_CACHE["key"] = len(raw)
++    return _ZH_TEXT_CACHE["map"].get(eng)
++
++
++def _zanatomy_sync_editor_text():
++    # ZANATOMY-PATCH: 打开文件时按语言切换文本编辑器里的说明文本。
++    pairs = (("HOW TO ...", "使用方法"),)
++    try:
++        zh = _ui_lang(bpy.context) == "中文"
++    except Exception:
++        zh = False
++    ctx = bpy.context
++    screen = getattr(ctx, "screen", None)
++    for area in (screen.areas if screen else []):
++        if area.type != "TEXT_EDITOR":
++            continue
++        space = area.spaces[0]
++        current = space.text.name if getattr(space, "text", None) else ""
++        for en, cn in pairs:
++            want = cn if zh else en
++            if current in (en, cn) and want in bpy.data.texts and current != want:
++                space.text = bpy.data.texts[want]
++
++
++def _zanatomy_text_for_object(ob):
++    # ZANATOMY-PATCH: 中文界面下优先给中文词条，找不到再回退英文原件。
++    # 肌肉起止点对象的数据块名带 .e/.o/.e1 之类后缀，需要归一化后再查。
++    if ob is None or getattr(ob, "data", None) is None:
++        return None
++    eng, _ = clean_name(ob.data.name)
++    keys = [eng]
++    base = eng
+     for suffix in (".e", ".o"):
+         if base.endswith(suffix):
+             base = base[:-2]
+             break
+-    match = re.match(r"^(.*)\.[eo]\d+$", name)
++    match = re.match(r"^(.*)\.[eo]\d+$", eng)
+     if match:
+         base = match.group(1)
+-    if base != name:
+-        names.append(base)
+-    return names
++    if base != eng:
++        keys.append(base)
++    candidates = []
++    try:
++        if _ui_lang(bpy.context) == "中文":
++            for key in keys:
++                zh = _zanatomy_english_to_chinese(key)
++                if zh and zh not in candidates:
++                    candidates.append(zh)
++    except Exception:
++        pass
++    for key in keys:
++        if key not in candidates:
++            candidates.append(key)
++    for name in candidates:
++        text = bpy.data.texts.get(name)
++        if text is not None:
++            return text
++    return None
+ 
+ 
+ def msgbus_callback(*args):
+@@ -878,18 +1036,13 @@
+     active_object = bpy.context.active_object
+     if not active_object or not active_object.data: return
+     
+-    basename, _ = clean_name(active_object.data.name)
+     text_editor_area = None
+     for area in bpy.context.screen.areas:
+         if area.type == "TEXT_EDITOR":
+             text_editor_area = area
+             break
+     
+-    doc_text = None
+-    for _name in _zanatomy_base_names(basename):
+-        doc_text = bpy.data.texts.get(_name)
+-        if doc_text is not None:
+-            break
++    doc_text = _zanatomy_text_for_object(active_object)
+     if text_editor_area and doc_text is not None:
+         text_editor_area.spaces[0].text = doc_text
+         text_editor_area.spaces[0].top = 0
+@@ -947,6 +1100,41 @@
+ subscribe_to = bpy.types.LayerObjects, "active"
+ owner = object()
+ 
++def _zanatomy_apply_language(context, lang):
++    # ZANATOMY-PATCH: 语言下拉一改就应用；同时切换 UI 文案与说明文本。
++    try:
++        context.scene.zanatomy.ui_language = "中文" if lang == "中文" else "English"
++    except Exception:
++        pass
++    try:
++        _set_panel_labels(context)
++    except Exception:
++        pass
++    outcome = None
++    try:
++        outcome = bpy.ops.object.translate_atlas(lang=lang)
++    except Exception as ex:
++        print("Z-Anatomy: 应用语言失败:", ex)
++    try:
++        _zanatomy_sync_editor_text()
++    except Exception:
++        pass
++    return outcome
++
++
++class ZANATOMY_OT_reapply_language(bpy.types.Operator):
++    """按当前选择重新应用语言"""
++    bl_idname = "zanatomy.reapply_language"
++    bl_label = "Re-apply"
++    bl_options = {'REGISTER', 'UNDO'}
++
++    def execute(self, context):
++        lang = context.scene.zanatomy.languages
++        _zanatomy_apply_language(context, lang)
++        self.report({'INFO'}, "已应用语言：{:s}".format(lang))
++        return {'FINISHED'}
++
++
+ class ZANATOMY_PT_languages(bpy.types.Panel):
+     
+     bl_space_type = 'VIEW_3D'
+@@ -957,7 +1145,11 @@
+ 
+     def draw(self, context):
+         layout = self.layout
+-        layout.operator("object.translate_atlas")
++        zan = context.scene.zanatomy
++        col = layout.column(align=True)
++        col.prop(zan, "languages", text="")
++        col.operator("zanatomy.reapply_language", icon='FILE_REFRESH',
++                     text=_t(context, "Re-apply"))
+ 
+ class ZANATOMY_PT_labels(bpy.types.Panel):
+     
+@@ -969,7 +1161,7 @@
+ 
+     def draw(self, context):
+         layout = self.layout
+-        layout.prop(context.scene.zanatomy, "enable_group_labels")
++        layout.prop(context.scene.zanatomy, "enable_group_labels", text=_t(context, "Enable Group Labels"))
+ 
+ class ZANATOMY_PT_Xsection(bpy.types.Panel):
+     bl_space_type = 'VIEW_3D'
+@@ -981,7 +1173,7 @@
+     def draw(self, context):
+         layout = self.layout
+         col = layout.column(align=True)
+-        col.label(text="Active:")
++        col.label(text=_t(context, "Active:"))
+         
+         obj = context.object
+         if obj and 'Cross-section-X' in obj:
+@@ -1024,7 +1216,7 @@
+ 
+         
+         col = layout.column(align=True)
+-        col.label(text="Layers:")
++        col.label(text=_t(context, "Layers:"))
+         for collection in (c for c in bpy.data.collections if 'Cross-section-X' in c):
+ 
+             # row = col.row(align=True)
+@@ -1076,9 +1268,8 @@
+ 
+ 
+ def _zanatomy_has_key_colors():
+-    # fix: the old gate used the hard-coded name '.Muscular system', which only exists
+-    # in the Lite build (the full template uses '4: Muscular system'), so the panel was
+-    # always empty and the toggle did nothing. Gate on data instead.
++    # ZANATOMY-PATCH: 原先用写死的集合名 '.Muscular system' 判断，
++    # 集合被改名/翻译（4: 肌肉系统）后整个面板就空了。改为按数据判断。
+     for col in bpy.data.collections:
+         for ob in col.objects:
+             if "key_color" in ob.keys():
+@@ -1097,7 +1288,7 @@
+         layout = self.layout
+         
+         if _zanatomy_has_key_colors():
+-            layout.prop(context.scene.zanatomy, "key_color")
++            layout.prop(context.scene.zanatomy, "key_color", text=_t(context, "Key Color"))
+ 
+ import os
+ class ZANATOMY_PT_Visibility(bpy.types.Panel):
+@@ -1109,8 +1300,8 @@
+ 
+     def draw(self, context):
+         layout = self.layout
+-        layout.operator(OBJECT_OT_sync_visibility.bl_idname)
+-        layout.prop(context.scene.zanatomy, "comic_shader")
++        layout.operator(OBJECT_OT_sync_visibility.bl_idname, text=_t(context, "Sync Visibility"))
++        layout.prop(context.scene.zanatomy, "comic_shader", text=_t(context, "Comic Shader"))
+ 
+         global layer_collections
+         layout.separator()
+@@ -1121,8 +1312,8 @@
+             else:
+                 col.operator('layer.remove_layer', text=collection, depress=True).collection = collection
+         
+-        layout.prop(context.scene.zanatomy, "background_color", expand=True)
+-        layout.prop(context.scene.zanatomy, "theme", expand=True)
++        layout.prop(context.scene.zanatomy, "background_color", expand=True, text=_t(context, "Background"))
++        layout.prop(context.scene.zanatomy, "theme", expand=True, text=_t(context, "Theme"))
+         
+         
+ def toggle_expand(context, state):
+@@ -1200,8 +1391,7 @@
+             ob[f'Cross-section-{self.axis}'] = self.enable
+             ob[f'Cross-section-{self.axis}-inverse'] = self.invert
+             ob.update_tag(refresh={'OBJECT'})
+-        if context.area:
+-            context.area.tag_redraw()
++        context.area.tag_redraw()
+ 
+         return {"FINISHED"}
+ 
+@@ -1231,8 +1421,7 @@
+             obj[f'Cross-section-{self.axis}'] = self.enable
+             obj[f'Cross-section-{self.axis}-inverse'] = self.invert
+             obj.update_tag(refresh={'OBJECT'})
+-        if context.area:
+-            context.area.tag_redraw()
++        context.area.tag_redraw()
+         return {"FINISHED"}
+ 
+ class OBJECT_OT_key_color(bpy.types.Operator):
+@@ -1262,6 +1451,16 @@
+                 ob.update_tag(refresh={'OBJECT'})
+         if context.area:
+             context.area.tag_redraw()
++    ui_language: bpy.props.StringProperty(default="", name="UI Language")
++    def languages_func(self, context):
++        _zanatomy_apply_language(context, self.languages)
++    languages: bpy.props.EnumProperty(
++        items=[('English', 'English', ''), ('Latin', 'Latin', ''),
++               ('Français', 'Français', ''), ('Español', 'Español', ''),
++               ('Portugues', 'Portuguese', ''), ('中文', '中文', '')],
++        name="Language",
++        default='中文',
++        update=languages_func)
+     key_color: bpy.props.BoolProperty(default=False, name="Key Color", update=key_color_func)
+ 
+     def comic_shader_func(self, context):
+@@ -1361,27 +1560,55 @@
+     OBJECT_OT_sync_visibility,
+     ZANATOMY_PT_Visibility,
+     LAYERS_OT_add_layer,
+-    LAYERS_OT_remove_layer
++    LAYERS_OT_remove_layer,
++    ZANATOMY_OT_reapply_language,
+ )
+ 
+ import blf
+ 
+ font_info = {
+     "handler": None,
++    "cjk_id": None,
++    "cjk_tried": False,
+ }
++
++
++def _cjk_font_id():
++    # ZANATOMY-PATCH: the HUD needs a CJK-capable blf font, and Blender 5.x
++    # dropped the dpi argument of blf.size() (it raised TypeError every redraw).
++    if font_info.get("cjk_tried"):
++        return font_info.get("cjk_id") or 0
++    font_info["cjk_tried"] = True
++    candidates = [
++        os.path.join(os.environ.get("LOCALAPPDATA", ""), "Microsoft", "Windows", "Fonts",
++                     "SourceHanSansCN-Regular.otf"),
++        os.path.join(os.path.expanduser("~"), "Downloads", "SourceHanSansCN-Regular.otf"),
++        os.path.join(os.environ.get("WINDIR", "C:\\Windows"), "Fonts", "SourceHanSansCN-Regular.otf"),
++        os.path.join(os.environ.get("WINDIR", "C:\\Windows"), "Fonts", "NotoSansSC-VF.ttf"),
++    ]
++    for path in candidates:
++        try:
++            if path and os.path.exists(path):
++                font_info["cjk_id"] = blf.load(path)
++                break
++        except Exception:
++            continue
++    return font_info.get("cjk_id") or 0
++
+ 
+ def draw_callback_px(self, context):
+     context = bpy.context
+     if not hasattr(context, 'area') or not context.object: return
+ 
++    font_id = _cjk_font_id()
+     font_size = 24
+-    blf.color(0, 255, 255, 255, 255)
++    blf.color(font_id, 1.0, 1.0, 1.0, 1.0)
+     try:
+-        blf.size(0, font_size)          # Blender 5.x: dpi argument removed
++        blf.size(font_id, font_size)
+     except TypeError:
+-        blf.size(0, font_size, 72)      # Blender <= 4.x
+-    blf.position(0, 55, context.area.height-70 - font_size, 0)
+-    blf.draw(0, f'{clean_name(context.object.name)[0]}')
++        blf.size(font_id, font_size, 72)
++    blf.position(font_id, 55, context.area.height - 70 - font_size, 0)
++    blf.draw(font_id, '{:s}'.format(clean_name(context.object.name)[0]))
+ 
+ def register_keymaps():
+     kc = bpy.context.window_manager.keyconfigs
+@@ -1575,6 +1802,10 @@
+ 
+ def register():
+     print("Registering to Change Defaults 3")
++    try:
++        bpy.app.translations.register(__package__, _ui_translations())
++    except Exception as _ex:
++        print("Z-Anatomy: translations register failed:", _ex)
+     register_keymaps()
+     z_anatomy_load_post()
+     bpy.app.handlers.load_post.append(z_anatomy_load_post)
+@@ -1590,6 +1821,10 @@
+ 
+ def unregister():
+     print("Unregistering app template")
++    try:
++        bpy.app.translations.unregister(__package__)
++    except Exception:
++        pass
+     for c in classes:
+         bpy.utils.unregister_class(c)
+     remove_shortkeys()

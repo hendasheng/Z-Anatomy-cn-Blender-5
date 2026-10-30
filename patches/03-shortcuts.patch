@@ -1,0 +1,141 @@
+--- a/__init__.py
++++ b/__init__.py
+@@ -1347,7 +1347,7 @@
+             if tex_coord_node.object and re.match(r'.+\.\d\d\d', tex_coord_node.object.name):
+                 tex_coord_node.object = bpy.data.objects[re.split(r'\.\d\d\d', tex_coord_node.object.name)[0]]
+         
+-        toggle_expand(context, 2)
++        toggle_expand(context, 12)
+         return {"FINISHED"}
+ 
+ class LAYERS_OT_remove_layer(bpy.types.Operator):
+@@ -1365,6 +1365,76 @@
+             
+         bpy.data.collections.remove(collection)
+         return {"FINISHED"}
++
++class ZANATOMY_OT_show_system(bpy.types.Operator):
++    """按编号显示该系统的全部层级内容（递归），而不是只显示第一层"""
++    bl_idname = "zanatomy.show_system"
++    bl_label = "隐藏其他集合"
++    bl_options = {'REGISTER', 'UNDO'}
++
++    index: bpy.props.IntProperty(name="Index", default=1, min=0, max=99)
++    extend: bpy.props.BoolProperty(name="Extend", default=False)
++
++    @staticmethod
++    def _number_of(collection):
++        match = re.match(r"\s*(\d+)\s*[:：]", collection.name)
++        return int(match.group(1)) if match else None
++
++    @staticmethod
++    def _set_branch(lc, hide):
++        lc.hide_viewport = hide
++        if not hide:
++            lc.exclude = False
++            # 集合下的物体自身也可能被 hide_set / hide_viewport 藏起来了，
++            # 只放开集合层级会变成「只显示第一层」，所以逐层清掉物体级隐藏。
++            for ob in lc.collection.objects:
++                try:
++                    ob.hide_viewport = False
++                except Exception:
++                    pass
++                try:
++                    if ob.hide_get():
++                        ob.hide_set(False)
++                except Exception:
++                    pass
++        for child in lc.children:
++            ZANATOMY_OT_show_system._set_branch(child, hide)
++
++    def execute(self, context):
++        root = context.view_layer.layer_collection
++        targets = [lc for lc in root.children if self._number_of(lc.collection) == self.index]
++        if not targets:
++            children = list(root.children)
++            if 1 <= self.index <= len(children):
++                targets = [children[self.index - 1]]
++        if not targets:
++            self.report({'WARNING'}, "没有编号为 {:d} 的集合".format(self.index))
++            return {'CANCELLED'}
++
++        if not self.extend:
++            for lc in root.children:
++                if lc not in targets:
++                    self._set_branch(lc, True)
++        for lc in targets:
++            self._set_branch(lc, False)
++
++        context.view_layer.update()
++
++        # 让大纲视图把该集合整棵树展开（不是只展开第一层）
++        area = next((a for a in context.screen.areas if a.type == 'OUTLINER'), None)
++        if area is not None:
++            try:
++                with context.temp_override(area=area):
++                    bpy.ops.outliner.show_hierarchy()
++                    for _ in range(16):
++                        bpy.ops.outliner.expanded_toggle()
++            except Exception:
++                pass
++            area.tag_redraw()
++
++        self.report({'INFO'}, "显示：{:s}".format(", ".join(lc.collection.name for lc in targets)))
++        return {'FINISHED'}
++
+ 
+ class OBJECT_OT_collection_x_section(bpy.types.Operator):
+     """Cross Section for Collection"""
+@@ -1561,6 +1631,7 @@
+     ZANATOMY_PT_Visibility,
+     LAYERS_OT_add_layer,
+     LAYERS_OT_remove_layer,
++    ZANATOMY_OT_show_system,
+     ZANATOMY_OT_reapply_language,
+ )
+ 
+@@ -1800,6 +1871,33 @@
+ #     bpy.app.handlers.load_factory_startup_post.remove(load_handler_for_startup)
+ 
+ 
++def _zanatomy_bind_system_keys():
++    # ZANATOMY-PATCH: 每次启动重绑 Outliner 的 1-0（含 alt/shift 变体），
++    # 因为 keymap 存在 userpref 里，可能被别的 Blender 实例用旧偏好覆盖。
++    try:
++        kc = bpy.context.window_manager.keyconfigs.active
++    except Exception:
++        return
++    keys = ["ONE", "TWO", "THREE", "FOUR", "FIVE", "SIX", "SEVEN", "EIGHT", "NINE", "ZERO"]
++    variants = ((False, False), (False, True), (True, False), (True, True))
++    for km in kc.keymaps:
++        if km.name != "Outliner":
++            continue
++        for kmi in [i for i in km.keymap_items
++                    if i.type in keys and i.idname in ("zanatomy.show_system", "object.hide_collection")]:
++            km.keymap_items.remove(kmi)
++        for number, key in enumerate(keys, start=1):
++            for shift, alt in variants:
++                try:
++                    item = km.keymap_items.new("zanatomy.show_system", key, "PRESS",
++                                               any=False, shift=shift, ctrl=False, alt=alt,
++                                               oskey=False, key_modifier="NONE")
++                    item.properties.index = number
++                    item.properties.extend = bool(shift)
++                except Exception:
++                    pass
++
++
+ def register():
+     print("Registering to Change Defaults 3")
+     try:
+@@ -1812,6 +1910,10 @@
+     for c in classes:
+         bpy.utils.register_class(c)
+     bpy.types.Scene.zanatomy = bpy.props.PointerProperty(type=ZAnatomyProps)
++    try:
++        _zanatomy_bind_system_keys()
++    except Exception as _ex:
++        print('Z-Anatomy: bind system keys failed:', _ex)
+     
+     add_shortkeys()
+ 
