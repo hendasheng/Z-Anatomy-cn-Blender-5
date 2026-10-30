@@ -12,7 +12,12 @@
 - Restore original text for file saving and final rendering, then resume UI drawing. Preserve underlying text data and leader lines.
 - Leave the original text block with invalid encoding unchanged.
 
+- Add an About text block with v1.0.1, repository URL, and changelog link.
+- Add text recovery copies and pre-undo cleanup; verify creation, deletion, saving, and reopening.
+
 ### Performance optimization and validation
+
+- Cache text objects and refresh on text geometry changes; skip repeated scans and redraws while idle.
 
 Blender 5.2.0 LTS, same Startup.blend, 1,659 valid text objects. Tag text data for update and update the view layer eight times; discard the first two samples and report the median of the remaining six.
 

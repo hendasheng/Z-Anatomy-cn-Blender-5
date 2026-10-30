@@ -13,6 +13,9 @@ _handle = None
 _hidden = []  # (text datablock, last non-empty body); visibility is never changed.
 _font = 0
 _font_path = None
+_labels = []
+_dirty = True
+_BODY_KEY = '_zanatomy_ui_body'
 
 def is_label(obj):
     return obj.type == 'FONT' and '\x00' not in obj.data.body
@@ -35,10 +38,13 @@ def stop():
     for data, body in _hidden:
         try:
             if not data.body:
-                data.body = body
+                data.body = data.get(_BODY_KEY, body)
+            if _BODY_KEY in data:
+                del data[_BODY_KEY]
         except ReferenceError:
             pass
     _hidden.clear()
+    _labels.clear()
     if _font_path:
         blf.unload(_font_path)
         os.unlink(_font_path)
@@ -48,20 +54,38 @@ def stop():
 
 
 def maintain_hidden():
+    global _dirty
     # Keep actual objects and all visibility flags intact for atlas operators.
     if _handle is None:
         return None
+    if not _dirty:
+        return 0.3
+    _dirty = False
+    live = []
+    for data, body in _hidden:
+        try:
+            data.as_pointer()
+            if data.name in bpy.data.curves:
+                live.append((data, body))
+        except ReferenceError:
+            pass
+    _hidden[:] = live
     known = {data.as_pointer(): index for index, (data, _) in enumerate(_hidden)}
-    for obj in bpy.data.objects:
+    _labels.clear()
+    for obj in bpy.context.scene.objects:
         if is_label(obj):
+            _labels.append(obj)
             data = obj.data
             index = known.get(data.as_pointer())
             if index is None:
                 known[data.as_pointer()] = len(_hidden)
-                _hidden.append((data, data.body))
+                body = data.body or data.get(_BODY_KEY, '')
+                _hidden.append((data, body))
+                data[_BODY_KEY] = body
             elif data.body:
                 # Language operators continue writing to the original text data.
                 _hidden[index] = (data, data.body)
+                data[_BODY_KEY] = data.body
             if data.body:
                 data.body = ''
     redraw()
@@ -69,7 +93,7 @@ def maintain_hidden():
 
 
 def start():
-    global _handle, _font, _font_path
+    global _handle, _font, _font_path, _dirty
     stop()
     # Reuse the packed atlas font rather than the default font without CJK glyphs.
     _font = 0
@@ -88,6 +112,7 @@ def start():
             except RuntimeError:
                 _font = 0
     _handle = bpy.types.SpaceView3D.draw_handler_add(draw, (), 'WINDOW', 'POST_PIXEL')
+    _dirty = True
     maintain_hidden()
     bpy.app.timers.register(maintain_hidden, first_interval=0.3)
 
@@ -100,10 +125,19 @@ def draw():
     blf.enable(_font, blf.SHADOW)
     blf.shadow(_font, 3, 0, 0, 0, 1)
     blf.shadow_offset(_font, 1, -1)
-    bodies = {data.as_pointer(): body for data, body in _hidden}
+    bodies = {}
+    for data, body in _hidden:
+        try:
+            bodies[data.as_pointer()] = body
+        except ReferenceError:
+            continue
     try:
         # Draw the original visible text objects, regardless of selection.
-        for obj in ctx.view_layer.objects:
+        for obj in tuple(_labels):
+            try:
+                obj.name
+            except ReferenceError:
+                continue
             if not is_label(obj):
                 continue
             if not obj.visible_get(view_layer=ctx.view_layer, viewport=ctx.space_data):
@@ -171,7 +205,34 @@ def before_load(_):
     stop()
 
 
+@persistent
+def geometry_changed(scene=None, depsgraph=None):
+    global _dirty
+    if depsgraph is None or any(
+        isinstance(update.id, bpy.types.Curve)
+        or (isinstance(update.id, bpy.types.Object) and update.id.type == 'FONT'
+            and update.is_updated_geometry)
+        for update in depsgraph.updates
+    ):
+        _dirty = True
+
+
+@persistent
+def restore_before_undo(_):
+    if _handle is not None:
+        stop()
+
+
+def add_about_text():
+    text = bpy.data.texts.get('关于 Z-Anatomy · v1.0.1')
+    if text is None:
+        text = bpy.data.texts.new('关于 Z-Anatomy · v1.0.1')
+    text.clear()
+    text.write('Z-Anatomy 中文版 — Blender 5.0+ 适配与优化\n\n当前版本 / Version: v1.0.1\n仓库 / Repository:\nhttps://github.com/hendasheng/Z-Anatomy-cn-Blender-5\n\n版本记录 / Changelog:\nhttps://github.com/hendasheng/Z-Anatomy-cn-Blender-5/blob/main/CHANGELOG.md\n\n原始项目: Z-Anatomy\n中文翻译: Dean Song (@Dean-Song-1)\n适配与优化: @hendasheng\n')
+
+
 def enable_on_load():
+    add_about_text()
     start()
     return None
 
@@ -212,6 +273,11 @@ def register():
     bpy.app.handlers.render_pre.append(before_save)
     bpy.app.handlers.render_post.append(after_save)
     bpy.app.handlers.render_cancel.append(after_save)
+    bpy.app.handlers.depsgraph_update_post.append(geometry_changed)
+    bpy.app.handlers.undo_pre.append(restore_before_undo)
+    bpy.app.handlers.redo_pre.append(restore_before_undo)
+    bpy.app.handlers.undo_post.append(after_load)
+    bpy.app.handlers.redo_post.append(after_load)
 
 
 def unregister():
@@ -225,6 +291,11 @@ def unregister():
     bpy.app.handlers.render_pre.remove(before_save)
     bpy.app.handlers.render_post.remove(after_save)
     bpy.app.handlers.render_cancel.remove(after_save)
+    bpy.app.handlers.depsgraph_update_post.remove(geometry_changed)
+    bpy.app.handlers.undo_pre.remove(restore_before_undo)
+    bpy.app.handlers.redo_pre.remove(restore_before_undo)
+    bpy.app.handlers.undo_post.remove(after_load)
+    bpy.app.handlers.redo_post.remove(after_load)
     for cls in (ZA_PT_screen_labels, ZA_OT_screen_labels):
         bpy.utils.unregister_class(cls)
     del bpy.types.WindowManager.za_screen_font_size
