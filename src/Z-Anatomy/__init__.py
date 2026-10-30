@@ -1899,6 +1899,10 @@ def _zanatomy_bind_system_keys():
 
 
 def register():
+    from . import screen_labels
+    screen_labels.register()
+    if not bpy.app.background:
+        bpy.app.timers.register(screen_labels.enable_on_load, first_interval=1.0)
     print("Registering to Change Defaults 3")
     try:
         bpy.app.translations.register(__package__, _ui_translations())
@@ -1922,6 +1926,8 @@ def register():
 
 
 def unregister():
+    from . import screen_labels
+    screen_labels.unregister()
     print("Unregistering app template")
     try:
         bpy.app.translations.unregister(__package__)

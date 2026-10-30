@@ -10,14 +10,26 @@ Original models and atlas: **Z-Anatomy**. Chinese translation: **Dean Song (@Dea
 
 ## Improvements
 
-- Updated HUD font-size calls and Chinese font loading.
-- Fixed missing language columns, empty translation fallback, Key colors checks, and redraw calls without an active area.
-- Improved synchronization between object selection and the text editor, including muscle attachment name suffixes.
-- Improved Chinese interface text, language selection, and terminology lookup.
-- Preserved collection numbers and improved system visibility, number shortcuts, and Outliner expansion.
-- Organized localized names, supplementary terminology, and multilingual glossary cards.
+### Features and usability
 
-**Supports Blender 5.0+, with Blender 5.2 being the latest version verified so far.** Compatibility with later versions remains to be verified.
+- **v1.0.1: UI label drawing** retains original text, anchors, and visibility rules. Font size scales with the view, with an adjustable maximum.
+- Improve Chinese UI, language switching, terminology lookup, and text-editor synchronization.
+- Preserve collection numbers and improve system visibility, shortcuts, and Outliner expansion.
+- Saving and final rendering retain original text data. UI text does not yet support partial model occlusion.
+
+### Performance
+
+- **v1.0.1: remove viewport geometry generation for valid text objects**, using UI drawing while retaining underlying text data.
+- Blender 5.2 benchmark: approximately **1.04 million vertices and 1.03 million triangles reduced to zero** across 1,659 valid text objects.
+- Median forced text geometry update fell from **118.63 ms to 84.65 ms**, approximately **29%**. This excludes UI drawing cost and is not a viewport FPS improvement figure.
+
+### Compatibility and fixes
+
+- Update HUD font-size calls and Chinese font loading.
+- Fix missing language columns, empty translation fallback, Key colors checks, suffix lookup, and redraw calls without an active area.
+- **Supports Blender 5.0+, verified through Blender 5.2.** Later versions remain to be verified.
+
+See the [changelog](CHANGELOG.en.md) for details and test methodology.
 
 ## Download and install
 
