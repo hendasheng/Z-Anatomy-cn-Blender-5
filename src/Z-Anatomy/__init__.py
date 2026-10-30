@@ -1038,7 +1038,7 @@ def msgbus_callback(*args):
     
     text_editor_area = None
     for area in bpy.context.screen.areas:
-        if area.type == "TEXT_EDITOR":
+        if area.type == "TEXT_EDITOR" and not (area.spaces.active.text and area.spaces.active.text.name.startswith("关于 Z-Anatomy")):
             text_editor_area = area
             break
     
