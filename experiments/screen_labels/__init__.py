@@ -16,6 +16,37 @@ _font_path = None
 _labels = []
 _dirty = True
 _BODY_KEY = '_zanatomy_ui_body'
+_lines_hidden = []
+_leader_objects = []
+
+
+def sync_leader_lines():
+    if bpy.context.window_manager.za_show_names:
+        for obj, was_hidden in _lines_hidden:
+            try:
+                obj.hide_viewport = was_hidden
+            except ReferenceError:
+                pass
+        _lines_hidden.clear()
+        return
+    known = set()
+    for obj, _ in _lines_hidden:
+        try:
+            known.add(obj.as_pointer())
+            if not obj.hide_viewport:
+                obj.hide_viewport = True
+        except ReferenceError:
+            pass
+    for obj in _leader_objects:
+        if obj.type in {'MESH', 'CURVE'} and re.search(r'\.j(?:\.\d{3})?$', obj.name):
+            if obj.as_pointer() not in known:
+                _lines_hidden.append((obj, obj.hide_viewport))
+                obj.hide_viewport = True
+
+
+def names_changed(self, context):
+    sync_leader_lines()
+    redraw()
 
 def is_label(obj):
     return obj.type == 'FONT' and '\x00' not in obj.data.body
@@ -45,6 +76,12 @@ def stop():
             pass
     _hidden.clear()
     _labels.clear()
+    for obj, was_hidden in _lines_hidden:
+        try:
+            obj.hide_viewport = was_hidden
+        except ReferenceError:
+            pass
+    _lines_hidden.clear()
     if _font_path:
         blf.unload(_font_path)
         os.unlink(_font_path)
@@ -58,6 +95,7 @@ def maintain_hidden():
     # Keep actual objects and all visibility flags intact for atlas operators.
     if _handle is None:
         return None
+    sync_leader_lines()
     if not _dirty:
         return 0.3
     _dirty = False
@@ -72,6 +110,7 @@ def maintain_hidden():
     _hidden[:] = live
     known = {data.as_pointer(): index for index, (data, _) in enumerate(_hidden)}
     _labels.clear()
+    _leader_objects[:] = [o for o in bpy.context.scene.objects if o.type in {'MESH', 'CURVE'} and re.search(r'\.j(?:\.\d{3})?$', o.name)]
     for obj in bpy.context.scene.objects:
         if is_label(obj):
             _labels.append(obj)
@@ -266,7 +305,7 @@ def after_save(_):
 
 
 def register():
-    bpy.types.WindowManager.za_show_names = bpy.props.BoolProperty(name='显示名称', default=True, update=lambda self, context: redraw())
+    bpy.types.WindowManager.za_show_names = bpy.props.BoolProperty(name='显示名称', default=True, update=names_changed)
     bpy.types.WindowManager.za_screen_font_size = bpy.props.IntProperty(name='最大字号', default=20, min=8, max=48)
     for cls in (ZA_OT_screen_labels, ZA_PT_screen_labels):
         bpy.utils.register_class(cls)
@@ -304,4 +343,5 @@ def unregister():
         bpy.utils.unregister_class(cls)
     del bpy.types.WindowManager.za_screen_font_size
     del bpy.types.WindowManager.za_show_names
+
 

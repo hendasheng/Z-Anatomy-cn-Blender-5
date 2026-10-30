@@ -6,7 +6,7 @@
 
 ### Features and usability
 
-- Add a Show Names toggle, enabled by default. Turning it off hides UI text without restoring text geometry.
+- Add a Show Names toggle, enabled by default. Turning it off hides names and leader lines; turning it on restores prior line visibility without restoring text geometry.
 
 - Replace viewport geometry for 1,659 valid text objects with UI text drawing, retaining original content, anchors, and object/collection visibility rules.
 - Scale text with the view using its original scene size, with a maximum font size. Remove fixed-size mode.
