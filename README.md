@@ -1,5 +1,7 @@
 # Z-Anatomy 中文版 — Blender 5.0+ 适配与优化
 
+**简体中文** | [English](README.en.md)
+
 基于 [Z-Anatomy 官方项目](https://github.com/Z-Anatomy/Models-of-human-anatomy) 和 [Dean Song 的简体中文版](https://github.com/Dean-Song-1/z-anatomy-)，面向 Blender 5.0 及以上版本进行兼容适配、问题修复和使用体验优化。
 
 原始模型与图谱来自 Z-Anatomy；中文翻译来自 **Dean Song（@Dean-Song-1）**；本项目的适配与优化工作由 **@hendasheng** 完成。详细来源与署名见 [ATTRIBUTION.md](ATTRIBUTION.md)。
@@ -52,14 +54,3 @@
 ## 已知限制
 
 部分名称和场景中的说明文字仍为英文；一个原始文本数据块存在编码问题。中文词表沿用来源项目，尚未进行专业术语逐条校审。
-
-## English
-
-Z-Anatomy Chinese edition adapted and optimized for Blender 5.0+.
-Based on the official Z-Anatomy project and Dean Song's Simplified Chinese edition.
-Original models and atlas: Z-Anatomy. Chinese translation: Dean Song (@Dean-Song-1).
-Compatibility fixes and workflow improvements: @hendasheng.
-Blender 5.0+ is the target; a per-version runtime test matrix is not yet available.
-
-
-
