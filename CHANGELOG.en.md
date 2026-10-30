@@ -10,11 +10,11 @@
 
 - Replace viewport geometry for 1,659 valid text objects with UI text drawing, retaining original content, anchors, and object/collection visibility rules.
 - Scale text with the view using its original scene size, with a maximum font size. Remove fixed-size mode.
-- Use UI text by default. Keep only the maximum font-size setting in the panel; remove the original-label switch and explanatory labels.
+- Use UI text by default. Keep the Show Names toggle and maximum font-size setting in the panel; remove the original-label switch and explanatory labels.
 - Restore original text for file saving and final rendering, then resume UI drawing. Preserve underlying text data and leader lines.
 - Leave the original text block with invalid encoding unchanged.
 
-- Add an About text block with v1.0.1, repository URL, and changelog link.
+- Add a default About editor above the help editor, showing v1.0.1, repository URL, and changelog link. Object selection does not replace the About text.
 - Add text recovery copies and pre-undo cleanup; verify creation, deletion, saving, and reopening.
 
 ### Performance optimization and validation
