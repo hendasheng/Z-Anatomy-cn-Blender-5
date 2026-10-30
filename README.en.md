@@ -17,7 +17,7 @@ Original models and atlas: **Z-Anatomy**. Chinese translation: **Dean Song (@Dea
 - Preserved collection numbers and improved system visibility, number shortcuts, and Outliner expansion.
 - Organized localized names, supplementary terminology, and multilingual glossary cards.
 
-**Target: Blender 5.0+.** Per-version runtime test records are not yet available; support for every later version has not been verified.
+**Supports Blender 5.0+, with Blender 5.2 being the latest version verified so far.** Compatibility with later versions remains to be verified.
 
 ## Download and install
 
