@@ -6,6 +6,8 @@
 
 ### Features and usability
 
+- Add a Show Names toggle, enabled by default. Turning it off hides UI text without restoring text geometry.
+
 - Replace viewport geometry for 1,659 valid text objects with UI text drawing, retaining original content, anchors, and object/collection visibility rules.
 - Scale text with the view using its original scene size, with a maximum font size. Remove fixed-size mode.
 - Use UI text by default. Keep only the maximum font-size setting in the panel; remove the original-label switch and explanatory labels.

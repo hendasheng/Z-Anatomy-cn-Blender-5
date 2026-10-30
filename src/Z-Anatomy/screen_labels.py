@@ -119,6 +119,8 @@ def start():
 
 def draw():
     ctx = bpy.context
+    if not ctx.window_manager.za_show_names:
+        return
     if not ctx.region or not ctx.region_data or not ctx.space_data.overlay.show_overlays:
         return
     blf.size(_font, ctx.window_manager.za_screen_font_size)
@@ -197,6 +199,7 @@ class ZA_PT_screen_labels(bpy.types.Panel):
     bl_category = 'Z-Anatomy'
 
     def draw(self, context):
+        self.layout.prop(context.window_manager, 'za_show_names')
         self.layout.prop(context.window_manager, 'za_screen_font_size')
 
 
@@ -263,6 +266,7 @@ def after_save(_):
 
 
 def register():
+    bpy.types.WindowManager.za_show_names = bpy.props.BoolProperty(name='显示名称', default=True, update=lambda self, context: redraw())
     bpy.types.WindowManager.za_screen_font_size = bpy.props.IntProperty(name='最大字号', default=20, min=8, max=48)
     for cls in (ZA_OT_screen_labels, ZA_PT_screen_labels):
         bpy.utils.register_class(cls)
@@ -299,4 +303,5 @@ def unregister():
     for cls in (ZA_PT_screen_labels, ZA_OT_screen_labels):
         bpy.utils.unregister_class(cls)
     del bpy.types.WindowManager.za_screen_font_size
+    del bpy.types.WindowManager.za_show_names
 
